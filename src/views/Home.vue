@@ -64,7 +64,7 @@
     <div class="chat-container">
       <div class="chat-content">
         <!-- 初始状态：欢迎消息和输入框在一起居中 -->
-        <div v-if="!messages.length" class="initial-state">
+        <div v-if="!messages.length && !uploadedFile" class="initial-state">
           <div class="welcome-message">
             <h2>我是 AssistGen, 很高兴见到你!</h2>
             <p>我可以帮你写代码、读文件、写作各种创意内容，请把你的任务交给我吧~</p>
@@ -95,9 +95,17 @@
                     <div class="icon">🌐</div>
                     {{ isSearching ? '取消搜索' : '联网搜索' }}
                   </button>
+                  <button 
+                    class="tool-btn"
+                    :class="{ 'tool-btn-active': isRagMode }"
+                    @click="isRagMode = !isRagMode"
+                  >
+                    <div class="icon">📚</div>
+                    知识库问答
+                  </button>
                 </div>
                 <div class="right-buttons">
-                  <button class="tool-btn">
+                  <button class="tool-btn" @click="$refs.fileInput?.click()">
                     <div class="icon">📎</div>
                   </button>
                   <button 
@@ -120,7 +128,7 @@
           </div>
         </div>
         
-        <!-- 对话状态：消息列表在上，输入框在底部 -->
+        <!-- 对话状态或有文件上传时：消息列表在上，输入框在底部 -->
         <div v-else class="chat-state">
           <div class="chat-messages">
             <div v-for="(message, index) in messages" 
@@ -144,13 +152,44 @@
             </div>
           </div>
           <div class="chat-input-container">
+            <!-- 文件上传状态显示 -->
+            <div v-if="uploadedFile" class="cefa5c26 d5e44c7a">
+              <div class="a4380d7b">
+                <div class="cd190a50 e5931f90">
+                  <div class="d2d04dae">
+                    <div class="ds-icon b3a5d6c1" style="font-size: 32px; width: 32px; height: 32px;">
+                      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"
+                           :data-type="getFileType(uploadedFile.type)">
+                        <path d="M7 9C7 6.79086 8.79086 5 11 5L18.6383 5C19.1906 5 19.6383 5.44772 19.6383 6V6.92308C19.6383 9.13222 21.4292 10.9231 23.6383 10.9231H24C24.5523 10.9231 25 11.3708 25 11.9231V23C25 25.2091 23.2091 27 21 27H11C8.79086 27 7 25.2091 7 23V9Z"/>
+                      </svg>
+                    </div>
+                    <div class="aea7ca45">
+                      <div class="f3a54b52">{{ uploadedFile.name }}</div>
+                      <div class="ee357eab">
+                        {{ uploadedFile.status === 'uploading' ? '上传中...' : 
+                           uploadedFile.status === 'error' ? '上传失败' :
+                           `${formatFileSize(uploadedFile.size)}` }}
+                      </div>
+                    </div>
+                    <button class="delete-btn" @click="handleDeleteFile">
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <path d="M12 4L4 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <path d="M4 4L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 原有的聊天输入框 -->
             <div class="chat-input">
               <div class="input-wrapper">
                 <input
                   v-model="userInput"
                   @keyup.enter="sendMessage"
                   type="text"
-                  placeholder="给 MateGen 发送消息"
+                  placeholder="给 AssistGen 发送消息"
                 />
                 <div class="button-group">
                   <div class="left-buttons">
@@ -170,9 +209,17 @@
                       <div class="icon">🌐</div>
                       {{ isSearching ? '取消搜索' : '联网搜索' }}
                     </button>
+                    <button 
+                      class="tool-btn"
+                      :class="{ 'tool-btn-active': isRagMode }"
+                      @click="isRagMode = !isRagMode"
+                    >
+                      <div class="icon">📚</div>
+                      知识库问答
+                    </button>
                   </div>
                   <div class="right-buttons">
-                    <button class="tool-btn">
+                    <button class="tool-btn" @click="$refs.fileInput?.click()">
                       <div class="icon">📎</div>
                     </button>
                     <button 
@@ -245,6 +292,14 @@
         <a :href="selectedResult.url" target="_blank" class="detail-link">查看原文</a>
       </div>
     </div>
+
+    <!-- 在 app-container div 内部的最后添加 -->
+    <input 
+      type="file" 
+      ref="fileInput"
+      @change="handleFileUpload"
+      style="display: none"
+    />
   </div>
 </template>
 
@@ -334,6 +389,24 @@ const isSearching = ref(false)
 const searchResults = ref<SearchResult[]>([])
 const showSearchPanel = ref(false)
 const selectedResult = ref<SearchResult | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+const uploadedFileInfo = ref<{
+  name: string;
+  type: string;
+  size: number;
+} | null>(null)
+const uploadStatus = ref<{
+  isUploading: boolean;
+  fileName: string;
+} | null>(null)
+const uploadedFile = ref<{
+  name: string;
+  size: number;
+  type: string;
+  status: 'uploading' | 'success' | 'error';
+} | null>(null)
+const isRagMode = ref(false)
+const currentIndexId = ref<string | null>(null)
 
 const md = new MarkdownIt({
   breaks: true,
@@ -661,16 +734,173 @@ const handleChat = async () => {
   }
 };
 
-// 修改发送消息的函数
-const sendMessage = async () => {
-  if (isSearching.value) {
-    await handleSearch();
-  } else if (isDeepThinking.value) {
-    await handleReason();
-  } else {
-    await handleChat();
+// 处理 RAG 聊天请求
+const handleRagChat = async () => {
+  if (!userInput.value.trim()) return
+  const userQuestion = userInput.value
+
+  // 添加用户消息
+  messages.value.push({
+    role: 'user',
+    content: userQuestion
+  })
+
+  // 清空输入
+  userInput.value = ''
+
+  // 添加 AI 回复消息
+  messages.value.push({
+    role: 'assistant',
+    content: ''
+  })
+
+  try {
+    const response = await fetch('http://localhost:8000/rag-chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [{
+          role: 'user',
+          content: userQuestion
+        }]
+      })
+    })
+
+    if (!response.ok) throw new Error('请求失败')
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+
+    if (!reader) throw new Error('无法创建流读取器')
+
+    let currentContent = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('\n')
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        
+        const content = line.slice(6).trim()
+        if (!content) continue
+
+        // 更新消息内容
+        currentContent += content
+        const lastMessage = messages.value[messages.value.length - 1]
+        lastMessage.content = currentContent
+      }
+
+      await scrollToBottom()
+    }
+
+    // 更新历史记录
+    if (chatHistory.value[currentChatIndex.value]) {
+      chatHistory.value[currentChatIndex.value].messages = [...messages.value]
+    }
+
+  } catch (err: any) {
+    console.error('Error:', err)
+    const lastMessage = messages.value[messages.value.length - 1]
+    lastMessage.content = `错误：${err.message}`
   }
-};
+}
+
+// 修改 sendMessage 方法，添加 RAG 模式判断
+const sendMessage = async () => {
+  if (currentIndexId.value) {
+    // 如果有 index_id，使用 chat-rag 接口
+    await handleChatRag()
+  } else {
+    if (isRagMode.value) {
+      await handleRagChat()
+    } else {
+      if (isSearching.value) {
+        await handleSearch()
+      } else if (isDeepThinking.value) {
+        await handleReason()
+      } else {
+        await handleChat()
+      }
+    }
+  }
+}
+
+// 修改 handleChatRag 方法
+const handleChatRag = async () => {
+  if (!userInput.value.trim()) return
+  const userQuestion = userInput.value
+
+  messages.value.push({
+    role: 'user',
+    content: userQuestion
+  })
+
+  userInput.value = ''
+  messages.value.push({
+    role: 'assistant',
+    content: ''
+  })
+
+  try {
+    const response = await fetch('http://localhost:8000/chat-rag', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [{
+          role: 'user',
+          content: userQuestion
+        }],
+        index_id: currentIndexId.value
+      })
+    })
+
+    if (!response.ok) throw new Error('请求失败')
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+
+    if (!reader) throw new Error('无法创建流读取器')
+
+    let currentContent = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('\n')
+      
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        
+        const content = line.slice(6).trim()
+        if (!content) continue
+
+        // 移除内容中的引号和处理转义字符
+        const cleanContent = content.replace(/^"|"$/g, '').replace(/\\n/g, '\n')
+        currentContent += cleanContent
+        const lastMessage = messages.value[messages.value.length - 1]
+        // 直接设置内容，让 renderMessage 函数处理渲染
+        lastMessage.content = currentContent
+      }
+
+      await scrollToBottom()
+    }
+
+  } catch (err: any) {
+    console.error('Error:', err)
+    const lastMessage = messages.value[messages.value.length - 1]
+    lastMessage.content = `错误：${err.message}`
+  }
+}
 
 const selectAgent = (agent: string) => {
   if (agent === 'TwoAgentChat') {
@@ -773,6 +1003,82 @@ const handleMessageClick = (message: ChatMessage, event: MouseEvent) => {
     showSearchPanel.value = true;
   }
 };
+
+const handleFileUpload = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  if (!input.files?.length) return
+  
+  const file = input.files[0]
+  const formData = new FormData()
+  formData.append('file', file)
+  
+  // 设置上传中状态
+  uploadedFile.value = {
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    status: 'uploading'
+  }
+  
+  try {
+    const response = await fetch('http://localhost:8000/upload', {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (!response.ok) {
+      throw new Error('Upload failed')
+    }
+    
+    const result = await response.json()
+    
+    if (result.status === 'success') {
+      // 保存 index_id
+      currentIndexId.value = result.index_id
+      
+      // 更新上传成功状态
+      uploadedFile.value = {
+        name: result.original_name,
+        size: result.size,
+        type: result.type,
+        status: 'success'
+      }
+    }
+    
+  } catch (err: any) {
+    console.error('Upload failed:', err)
+    if (uploadedFile.value) {
+      uploadedFile.value.status = 'error'
+    }
+    currentIndexId.value = null
+  }
+  
+  input.value = ''
+}
+
+// 格式化文件大小的辅助函数
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+// 添加删除文件的方法
+const handleDeleteFile = () => {
+  uploadedFile.value = null
+  currentIndexId.value = null
+}
+
+// 添加获取文件类型的方法
+const getFileType = (mimeType: string) => {
+  if (mimeType.includes('pdf')) return 'pdf'
+  if (mimeType.includes('word')) return 'doc'
+  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'xls'
+  if (mimeType.includes('powerpoint') || mimeType.includes('presentation')) return 'ppt'
+  if (mimeType.includes('text')) return 'txt'
+  if (mimeType.includes('image')) return 'image'
+  return 'default'
+}
 </script>
 
 <style>
@@ -900,7 +1206,7 @@ body {
 /* 消息区域样式 */
 .chat-messages {
   flex: 1;
-  padding-bottom: 180px;
+  padding-bottom: 280px; /* 增加更多底部padding，确保内容不被遮挡 */
 }
 
 .chat-input-container {
@@ -911,7 +1217,7 @@ body {
   width: 100%;
   max-width: 800px;
   background-color: #1e1e1e;
-  padding: 20px;
+  padding: 0 20px 20px; /* 修改padding */
   border-top: 1px solid #333;
   z-index: 10;
   transition: left 0.3s ease; /* 添加过渡效果 */
@@ -1814,5 +2120,248 @@ input::placeholder {
   height: 40px;
   background: linear-gradient(to bottom, transparent, #1e1e1e);
   pointer-events: none;
+  z-index: -1;
+}
+
+/* 在已有样式中添加 */
+.file-info-container {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(75, 75, 255, 0.05);
+  border: 1px solid rgba(75, 75, 255, 0.1);
+  border-radius: 8px;
+}
+
+.file-info-header {
+  color: #4b4bff;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.file-info-content {
+  color: #fff;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.file-info-content p {
+  margin: 4px 0;
+}
+
+.search-loading-container.error {
+  background: rgba(255, 75, 75, 0.1);
+  border-color: rgba(255, 75, 75, 0.3);
+}
+
+.search-loading-container.error .search-loading-text {
+  color: #ff4b4b;
+}
+
+/* 文件消息样式 */
+:deep(.file-message) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(75, 75, 255, 0.05);
+  border: 1px solid rgba(75, 75, 255, 0.1);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+:deep(.file-message.error) {
+  background: rgba(255, 75, 75, 0.05);
+  border-color: rgba(255, 75, 75, 0.1);
+}
+
+:deep(.file-icon) {
+  font-size: 24px;
+}
+
+:deep(.file-info) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+:deep(.file-name) {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+:deep(.file-status) {
+  color: #4b4bff;
+  font-size: 12px;
+}
+
+:deep(.file-message.error .file-status) {
+  color: #ff4b4b;
+}
+
+.upload-status-container {
+  margin-bottom: 16px;
+}
+
+.upload-status {
+  background: #2d2d2d;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.upload-header {
+  padding: 12px 16px;
+  color: #fff;
+  font-size: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.upload-content {
+  padding: 12px 16px;
+}
+
+.upload-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.file-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.file-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.file-name {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.file-status {
+  color: #888;
+  font-size: 12px;
+}
+
+/* 文件上传消息样式 */
+:deep(.cefa5c26) {
+  background: #2d2d2d;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  width: 220px;
+  z-index: 11;
+  position: relative;  /* 将相对定位移到父容器 */
+}
+
+:deep(.ca114c67) {
+  display: none;
+}
+
+:deep(.cd190a50) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+:deep(.d2d04dae) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+:deep(.aea7ca45) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+:deep(.f3a54b52) {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;  /* 减小文件名显示宽度 */
+}
+
+:deep(.ee357eab) {
+  color: #888;
+  font-size: 11px;
+}
+
+:deep(.error-message) {
+  color: #ff4b4b;
+  padding: 12px;
+  background: rgba(255, 75, 75, 0.1);
+  border: 1px solid rgba(255, 75, 75, 0.3);
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+:deep(.header-content) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+:deep(.delete-btn) {
+  background: none;
+  border: none;
+  color: #666;
+  padding: 3px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+  position: absolute;  /* 保持绝对定位 */
+  top: 4px;
+  right: 4px;
+  z-index: 12;  /* 确保按钮始终在最上层 */
+}
+
+:deep(.delete-btn:hover) {
+  color: #ff4b4b;
+  background: rgba(255, 75, 75, 0.1);
+}
+
+:deep(.ds-icon) {
+  svg {
+    &[data-type="pdf"] path {
+      fill: #F8CA27;
+    }
+    &[data-type="doc"] path, &[data-type="docx"] path {
+      fill: #4B8BF4;
+    }
+    &[data-type="xls"] path, &[data-type="xlsx"] path {
+      fill: #34A853;
+    }
+    &[data-type="ppt"] path, &[data-type="pptx"] path {
+      fill: #EA4335;
+    }
+    &[data-type="txt"] path {
+      fill: #9AA0A6;
+    }
+    &[data-type="image"] path {
+      fill: #4B8BF4;
+    }
+  }
+}
+
+:deep(.ds-icon.b3a5d6c1) {
+  font-size: 24px;  /* 减小图标大小 */
+  width: 24px;
+  height: 24px;
 }
 </style>
