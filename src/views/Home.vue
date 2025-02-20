@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :class="userStore.theme">
     <!-- 侧边栏 -->
     <div class="sidebar" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
       <div class="sidebar-header">
@@ -38,7 +38,7 @@
 
       <!-- 底部个人信息 -->
       <div class="user-section">
-        <button class="user-info">
+        <div class="user-menu" @click.stop="showUserMenu = !showUserMenu">
           <div class="user-avatar">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
               <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/>
@@ -46,8 +46,20 @@
               <path d="M17.9691 20C17.81 17.1085 16.9247 15 12 15C7.07527 15 6.18997 17.1085 6.03087 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </div>
-          <span class="user-text">个人信息</span>
-        </button>
+          <span class="user-text">{{ userStore.username }}</span>
+        </div>
+        
+        <!-- 用户菜单 -->
+        <div v-if="showUserMenu" class="user-dropdown">
+          <div class="menu-item" @click="handleLogout">
+            <svg width="16" height="16" viewBox="0 0 16 16">
+              <path d="M6 14H3C2.44772 14 2 13.5523 2 13V3C2 2.44772 2.44772 2 3 2H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M10 11L14 8L10 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M14 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            退出登录
+          </div>
+        </div>
       </div>
     </div>
 
@@ -309,6 +321,8 @@ import { marked, Renderer } from 'marked'
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import { ApiService } from '../services/api'
+import { AuthService } from '../services/api'
+import { useUserStore } from '../stores/user'
 
 interface StreamResponse {
   content: string
@@ -1079,6 +1093,39 @@ const getFileType = (mimeType: string) => {
   if (mimeType.includes('image')) return 'image'
   return 'default'
 }
+
+const handleLogout = () => {
+  AuthService.logout()
+}
+
+const userStore = useUserStore()
+const showUserMenu = ref(false)
+
+// 获取用户信息
+onMounted(async () => {
+  try {
+    const response = await AuthService.getUserInfo()
+    userStore.setUserInfo(response)
+  } catch (error) {
+    console.error('Failed to fetch user info:', error)
+  }
+})
+
+// 关闭菜单的点击外部处理
+const handleClickOutside = (event: MouseEvent) => {
+  const target = event.target as HTMLElement
+  if (!target.closest('.user-menu')) {
+    showUserMenu.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <style>
@@ -1104,6 +1151,24 @@ body {
   height: 100vh;
   overflow: hidden;
   background-color: #1e1e1e;
+}
+
+.app-container.light {
+  background-color: #ffffff;
+  color: #333333;
+}
+
+.app-container.light .sidebar {
+  background-color: #f5f5f5;
+  border-right-color: #e0e0e0;
+}
+
+.app-container.light .chat-input {
+  background-color: #f5f5f5;
+}
+
+.app-container.light input {
+  color: #333333;
 }
 
 /* 左侧栏 */
@@ -1325,27 +1390,66 @@ body {
 
 /* 底部个人信息样式 */
 .user-section {
-  margin-top: auto;
-  padding: 12px;
-  border-top: 1px solid #333;
+  position: relative;
+  padding: 8px;
 }
 
-.user-info {
+.user-menu {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
   padding: 8px 12px;
-  background: none;
-  border: none;
-  border-radius: 6px;
-  color: #fff;
   cursor: pointer;
-  transition: background-color 0.2s;
+  border-radius: 6px;
+  transition: all 0.2s;
+  color: #fff;
 }
 
-.user-info:hover {
-  background-color: #363636;
+.user-menu:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.arrow-icon {
+  transition: transform 0.2s;
+}
+
+.user-menu:hover .arrow-icon {
+  transform: rotate(180deg);
+}
+
+.user-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: #2d2d2d;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.2);
+  margin: 0 8px 8px;
+  z-index: 1000;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-item:last-child {
+  color: #ff4b4b;
+}
+
+.menu-item:last-child:hover {
+  background: rgba(255, 75, 75, 0.1);
 }
 
 .user-avatar {
@@ -2363,5 +2467,21 @@ input::placeholder {
   font-size: 24px;  /* 减小图标大小 */
   width: 24px;
   height: 24px;
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  color: #ff4b4b;
 }
 </style>

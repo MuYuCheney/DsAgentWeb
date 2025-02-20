@@ -1,4 +1,7 @@
 import { ChatMessage } from '../types'
+import axios from './axios'
+import router from '../router'
+import { sha256 } from '../utils/crypto'
 
 // 将接口定义移到类外部
 interface StreamChunk {
@@ -95,5 +98,68 @@ export class ApiService {
     }
 
     return response.body?.getReader()
+  }
+}
+
+const API_URL = ''  // 基础URL已在axios实例中设置
+
+export interface UserCreate {
+  username: string
+  email: string
+  password: string
+}
+
+export interface UserLogin {
+  email: string
+  password: string
+}
+
+export interface Token {
+  access_token: string
+  token_type: string
+}
+
+export const AuthService = {
+  async register(data: UserCreate): Promise<Token> {
+    const hashedPassword = await sha256(data.password)
+    const response = await axios.post('/register', {
+      username: data.username,
+      email: data.email,
+      password: hashedPassword
+    })
+    return response.data
+  },
+
+  async login(data: UserLogin): Promise<Token> {
+    const hashedPassword = await sha256(data.password)
+    const response = await axios.post('/token', {
+      email: data.email,
+      password: hashedPassword
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
+    return response.data
+  },
+
+  async logout() {
+    localStorage.removeItem('token')
+    router.push('/login')
+  },
+
+  // 验证token是否有效
+  async validateToken() {
+    try {
+      await axios.get('/validate-token')
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  async getUserInfo() {
+    const response = await axios.get('/users/me')
+    return response.data
   }
 } 
