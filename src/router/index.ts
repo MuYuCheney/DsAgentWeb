@@ -15,6 +15,11 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: Login
+    },
+    {
+      path: '/register',
+      name: 'register',
+      component: Login  // 使用同一个组件
     }
   ]
 })
@@ -23,14 +28,14 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   
-  // 如果访问登录页且已登录，跳转到首页
-  if (to.path === '/login' && token) {
+  // 如果已登录用户访问登录或注册页，跳转到首页
+  if ((to.path === '/login' || to.path === '/register') && token) {
     next('/')
     return
   }
   
-  // 如果访问其他页面且未登录，跳转到登录页
-  if (to.path !== '/login' && !token) {
+  // 如果未登录用户访问需要认证的页面，跳转到登录页
+  if (!token && to.path !== '/login' && to.path !== '/register') {
     next('/login')
     return
   }

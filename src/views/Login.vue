@@ -63,7 +63,7 @@
 
         <div class="register-link">
           {{ activeTab === 'login' ? '还没有账号？' : '已有账号？' }}
-          <a href="#" @click.prevent="activeTab = activeTab === 'login' ? 'register' : 'login'">
+          <a href="#" @click.prevent="handleTabChange">
             {{ activeTab === 'login' ? '立即注册' : '返回登录' }}
           </a>
         </div>
@@ -91,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { AuthService } from '../services/api'
 import MessageBox from '../components/MessageBox.vue'
@@ -178,22 +178,22 @@ const handleSubmit = async () => {
   clearErrors()
   
   try {
-    if (activeTab.value === 'login') {
-      const response = await AuthService.login({
-        email: form.value.email,
-        password: form.value.password
-      })
-      
-      localStorage.setItem('token', response.access_token)
-      router.push('/')
-    } else {
+    if (activeTab.value === 'register') {
       await AuthService.register({
         username: form.value.username,
         email: form.value.email,
         password: form.value.password
       })
-      
       showSuccessMessage.value = true
+      router.replace('/login')
+      activeTab.value = 'login'
+    } else {
+      const response = await AuthService.login({
+        email: form.value.email,
+        password: form.value.password
+      })
+      localStorage.setItem('token', response.access_token)
+      router.push('/')
     }
   } catch (error: any) {
     if (error.response?.status === 401) {
@@ -237,6 +237,18 @@ const showTerms = () => {
 const showPrivacy = () => {
   // TODO: 显示隐私政策
 }
+
+const handleTabChange = () => {
+  const newTab = activeTab.value === 'login' ? 'register' : 'login'
+  activeTab.value = newTab
+  // 更新 URL，但不触发新的导航
+  router.replace(`/${newTab}`)
+}
+
+onMounted(() => {
+  // 根据当前路由设置正确的标签
+  activeTab.value = router.currentRoute.value.path === '/register' ? 'register' : 'login'
+})
 
 watch(() => form.value.username, (val) => {
   if (activeTab.value === 'register' && val) {

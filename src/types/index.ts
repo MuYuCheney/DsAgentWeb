@@ -16,7 +16,7 @@ export interface SearchResult {
   title: string
   url: string
   snippet: string
-  date: string
-  source: string
+  date?: string
+  source?: string
   isExpanded?: boolean
 } 

@@ -10,7 +10,7 @@ interface StreamChunk {
 }
 
 export class ApiService {
-  private static baseUrl = 'http://localhost:8000'
+  private static baseUrl = import.meta.env.VITE_API_BASE_URL
 
   // 处理聊天消息流
   static async handleChatStream(reader: ReadableStreamDefaultReader<Uint8Array>, 
@@ -122,7 +122,7 @@ export interface Token {
 export const AuthService = {
   async register(data: UserCreate): Promise<Token> {
     const hashedPassword = await sha256(data.password)
-    const response = await axios.post('/register', {
+    const response = await axios.post('/api/register', {
       username: data.username,
       email: data.email,
       password: hashedPassword
@@ -132,7 +132,7 @@ export const AuthService = {
 
   async login(data: UserLogin): Promise<Token> {
     const hashedPassword = await sha256(data.password)
-    const response = await axios.post('/token', {
+    const response = await axios.post('/api/token', {
       email: data.email,
       password: hashedPassword
     }, {
@@ -151,7 +151,7 @@ export const AuthService = {
   // 验证token是否有效
   async validateToken() {
     try {
-      await axios.get('/validate-token')
+      await axios.get('/api/validate-token')
       return true
     } catch {
       return false
@@ -159,7 +159,7 @@ export const AuthService = {
   },
 
   async getUserInfo() {
-    const response = await axios.get('/users/me')
+    const response = await axios.get('/api/users/me')
     return response.data
   }
 } 
